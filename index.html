@@ -11,211 +11,769 @@
   <!-- Chart.js & SheetJS (Excel Import/Export) -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
 
-  <style>
-    :root {
-      --navy: #0f294a;
-      --navy-light: #1e3a5f;
-      --blue: #2563eb;
-      --bg: #f1f5f9;
-      --card: #ffffff;
-      --text: #1e293b;
-      --muted: #64748b;
-      --border: #e2e8f0;
-      --success: #16a34a;
-      --warning: #d97706;
-      --danger: #dc2626;
-    }
+  <!-- LOADING OVERLAY -->
+  <div id="loadingOverlay" class="loading-overlay hidden">
+    <div class="spinner-box">
+      <div class="spinner"></div>
+      <p id="loadingText">Menyinkronkan data dengan Google Spreadsheet...</p>
+    </div>
+  </div>
 
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
-    .hidden { display: none !important; }
+  <!-- TOAST NOTIFICATION -->
+  <div id="toastContainer" class="toast-container"></div>
 
-    /* LOADING & TOAST */
-    .loading-overlay {
-      position: fixed; inset: 0; background: rgba(15, 41, 74, 0.55);
-      display: flex; align-items: center; justify-content: center; z-index: 9999; backdrop-filter: blur(2px);
-    }
-    .spinner-box { background: #fff; padding: 24px 32px; border-radius: 12px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
-    .spinner {
-      width: 40px; height: 40px; border: 4px solid #e2e8f0; border-top-color: var(--navy);
-      border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
+  <!-- ====================================================================== -->
+  <!-- HALAMAN LOGIN & KONFIGURASI API URL                                    -->
+  <!-- ====================================================================== -->
+  <div id="loginScreen" class="login-screen">
+    <div class="login-card">
+      <div class="login-brand">
+        <div class="brand-emblem"><i class="fa-solid fa-landmark"></i></div>
+        <h1>SIK-DESA</h1>
+        <p id="loginDesaTitle">Sistem Informasi Administrasi Kependudukan Desa</p>
+      </div>
 
-    .toast-container { position: fixed; top: 20px; right: 20px; z-index: 10000; display: flex; flex-direction: column; gap: 10px; }
-    .toast {
-      padding: 12px 18px; border-radius: 8px; color: #fff; font-weight: 500;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15); animation: slideIn 0.25s ease; max-width: 360px;
-    }
-    .toast.success { background: var(--success); }
-    .toast.error { background: var(--danger); }
-    .toast.warning { background: var(--warning); }
-    @keyframes slideIn { from { transform: translateX(30px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+      <form id="loginForm" onsubmit="handleLoginSubmit(event)">
+        <div class="form-group">
+          <label>Username</label>
+          <div class="input-icon">
+            <i class="fa-solid fa-user"></i>
+            <input type="text" id="loginUsername" placeholder="Masukkan username (default: admin)" required />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <div class="input-icon">
+            <i class="fa-solid fa-lock"></i>
+            <input type="password" id="loginPassword" placeholder="Masukkan password (default: admin123)" required />
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">
+          <i class="fa-solid fa-right-to-bracket"></i> Masuk ke Sistem
+        </button>
+      </form>
 
-    /* LOGIN SCREEN */
-    .login-screen {
-      min-height: 100vh; display: flex; align-items: center; justify-content: center;
-      background: linear-gradient(135deg, var(--navy) 0%, #1d4ed8 100%); padding: 20px;
-    }
-    .login-card {
-      background: #fff; width: 100%; max-width: 420px; border-radius: 16px;
-      padding: 36px 30px; box-shadow: 0 20px 40px rgba(0,0,0,0.25);
-    }
-    .login-brand { text-align: center; margin-bottom: 24px; }
-    .brand-emblem {
-      width: 60px; height: 60px; border-radius: 14px; background: var(--navy); color: #fff;
-      display: flex; align-items: center; justify-content: center; font-size: 26px; margin: 0 auto 12px;
-    }
-    .login-brand h1 { font-size: 22px; color: var(--navy); font-weight: 700; }
-    .login-brand p { color: var(--muted); font-size: 13px; margin-top: 4px; }
-    .input-icon { position: relative; }
-    .input-icon i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--muted); }
-    .input-icon input { padding-left: 36px; }
-    .api-config-box { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--border); text-align: center; }
-    .btn-link { background: none; border: none; color: var(--blue); cursor: pointer; font-size: 12px; font-weight: 600; }
+      <div class="api-config-box">
+        <button type="button" class="btn-link" onclick="toggleApiConfig()">
+          <i class="fa-solid fa-plug"></i> Pengaturan Endpoint Google Apps Script API
+        </button>
+        <div id="apiConfigPanel" class="hidden" style="margin-top:10px;">
+          <label style="font-size:12px;color:#475569;">URL Web App Google Apps Script:</label>
+          <input type="url" id="apiUrlInput" placeholder="https://script.google.com/macros/s/..../exec" />
+          <button type="button" class="btn btn-sm btn-secondary" style="margin-top:6px;width:100%;" onclick="saveApiUrl()">
+            Simpan URL API
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 
-    /* APP LAYOUT */
-    .app-shell { display: flex; min-height: 100vh; }
-    .sidebar {
-      width: 260px; background: var(--navy); color: #fff; display: flex; flex-direction: column;
-      position: fixed; top: 0; bottom: 0; left: 0; z-index: 100; transition: transform 0.25s ease;
-    }
-    .sidebar-header {
-      padding: 18px 20px; border-bottom: 1px solid rgba(255,255,255,0.1);
-      display: flex; align-items: center; justify-content: space-between;
-    }
-    .logo-wrap { display: flex; align-items: center; gap: 12px; }
-    .logo-wrap img { width: 38px; height: 38px; object-fit: contain; border-radius: 6px; background: #fff; padding: 2px; }
-    .logo-fallback {
-      width: 38px; height: 38px; border-radius: 8px; background: rgba(255,255,255,0.15);
-      display: flex; align-items: center; justify-content: center; font-size: 18px;
-    }
-    .app-name { display: block; font-weight: 700; font-size: 16px; letter-spacing: 0.5px; }
-    .logo-wrap small { font-size: 11px; color: #cbd5e1; display: block; max-width: 155px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .sidebar-close { display: none; background: none; border: none; color: #fff; font-size: 18px; cursor: pointer; }
+  <!-- ====================================================================== -->
+  <!-- APLIKASI UTAMA (DASHBOARD SHELL)                                       -->
+  <!-- ====================================================================== -->
+  <div id="appShell" class="app-shell hidden">
+    <!-- SIDEBAR -->
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo-wrap">
+          <img id="sidebarLogo" src="" alt="Logo Desa" class="hidden" />
+          <div id="sidebarLogoFallback" class="logo-fallback"><i class="fa-solid fa-building-columns"></i></div>
+          <div>
+            <span class="app-name">SIK-DESA</span>
+            <small id="sidebarDesaName">Pemerintah Desa</small>
+          </div>
+        </div>
+        <button class="sidebar-close" onclick="toggleSidebar()"><i class="fa-solid fa-xmark"></i></button>
+      </div>
 
-    .sidebar-nav { padding: 12px; overflow-y: auto; flex: 1; }
-    .nav-item {
-      display: flex; align-items: center; gap: 12px; padding: 11px 14px; color: #cbd5e1;
-      text-decoration: none; border-radius: 8px; margin-bottom: 4px; font-weight: 500;
-      background: none; border: none; width: 100%; text-align: left; cursor: pointer; font-size: 13.5px;
-    }
-    .nav-item:hover, .nav-item.active { background: rgba(255,255,255,0.14); color: #fff; }
-    .nav-item.active { background: var(--blue); }
-    .nav-item i { width: 18px; text-align: center; }
-    .nav-toggle .arrow { margin-left: auto; font-size: 11px; }
-    .submenu { padding-left: 16px; display: none; }
-    .submenu.open { display: block; }
-    .nav-item.sub { font-size: 13px; padding: 9px 12px; }
-    .logout-link { margin-top: 16px; color: #fca5a5; }
-    .logout-link:hover { background: rgba(220,38,38,0.2); color: #fff; }
+      <nav class="sidebar-nav">
+        <a href="#" class="nav-item active" data-page="dashboard" onclick="navigateTo('dashboard', this)">
+          <i class="fa-solid fa-chart-pie"></i> <span>Dashboard</span>
+        </a>
+        <a href="#" class="nav-item" data-page="penduduk" onclick="navigateTo('penduduk', this)">
+          <i class="fa-solid fa-users"></i> <span>Data Penduduk</span>
+        </a>
+        <a href="#" class="nav-item" data-page="biodata" onclick="navigateTo('biodata', this)">
+          <i class="fa-solid fa-id-card"></i> <span>Biodata Penduduk</span>
+        </a>
+        <a href="#" class="nav-item" data-page="kk" onclick="navigateTo('kk', this)">
+          <i class="fa-solid fa-people-roof"></i> <span>Kartu Keluarga (KK)</span>
+        </a>
 
-    .main-wrapper { flex: 1; margin-left: 260px; display: flex; flex-direction: column; min-width: 0; }
-    .topbar {
-      height: 64px; background: #fff; border-bottom: 1px solid var(--border);
-      padding: 0 24px; display: flex; align-items: center; justify-content: space-between;
-      position: sticky; top: 0; z-index: 50;
-    }
-    .topbar-left { display: flex; align-items: center; gap: 14px; }
-    .menu-toggle { display: none; background: none; border: none; font-size: 20px; color: var(--navy); cursor: pointer; }
-    .topbar h2 { font-size: 18px; color: var(--navy); }
-    .sync-badge { font-size: 11px; color: var(--success); font-weight: 600; }
-    .topbar-right { display: flex; align-items: center; gap: 14px; }
-    .user-pill { display: flex; align-items: center; gap: 8px; background: var(--bg); padding: 6px 12px; border-radius: 20px; }
-    .user-pill i { font-size: 22px; color: var(--navy); }
-    .user-pill strong { display: block; font-size: 12.5px; line-height: 1.1; }
-    .user-pill small { font-size: 11px; color: var(--muted); }
+        <!-- SUBMENU MUTASI -->
+        <div class="nav-group">
+          <button type="button" class="nav-item nav-toggle" onclick="toggleSubmenu('mutasiSubmenu', this)">
+            <i class="fa-solid fa-right-left"></i> <span>Mutasi Penduduk</span>
+            <i class="fa-solid fa-chevron-down arrow"></i>
+          </button>
+          <div id="mutasiSubmenu" class="submenu">
+            <a href="#" class="nav-item sub" data-page="mutasi-datang" onclick="navigateTo('mutasi-datang', this)">
+              <i class="fa-solid fa-user-plus"></i> <span>Penduduk Datang</span>
+            </a>
+            <a href="#" class="nav-item sub" data-page="mutasi-pindah" onclick="navigateTo('mutasi-pindah', this)">
+              <i class="fa-solid fa-user-minus"></i> <span>Penduduk Pindah</span>
+            </a>
+            <a href="#" class="nav-item sub" data-page="mutasi-meninggal" onclick="navigateTo('mutasi-meninggal', this)">
+              <i class="fa-solid fa-book-skull"></i> <span>Penduduk Meninggal</span>
+            </a>
+          </div>
+        </div>
 
-    .content-area { padding: 24px; }
-    .page-section { display: none; }
-    .page-section.active { display: block; }
+        <a href="#" class="nav-item" data-page="rekapitulasi" onclick="navigateTo('rekapitulasi', this)">
+          <i class="fa-solid fa-table-list"></i> <span>Rekapitulasi Penduduk</span>
+        </a>
+        <a href="#" class="nav-item" data-page="laporan" onclick="navigateTo('laporan', this)">
+          <i class="fa-solid fa-file-lines"></i> <span>Laporan Kependudukan</span>
+        </a>
+        <a href="#" class="nav-item admin-only" data-page="pengaturan" onclick="navigateTo('pengaturan', this)">
+          <i class="fa-solid fa-gear"></i> <span>Pengaturan</span>
+        </a>
+        <a href="#" class="nav-item admin-only" data-page="pengguna" onclick="navigateTo('pengguna', this)">
+          <i class="fa-solid fa-user-shield"></i> <span>Manajemen Pengguna</span>
+        </a>
+        <a href="#" class="nav-item admin-only" data-page="log" onclick="navigateTo('log', this)">
+          <i class="fa-solid fa-clock-rotate-left"></i> <span>Log Aktivitas</span>
+        </a>
+        <a href="#" class="nav-item logout-link" onclick="handleLogout()">
+          <i class="fa-solid fa-right-from-bracket"></i> <span>Logout</span>
+        </a>
+      </nav>
+    </aside>
 
-    /* CARDS & KPI */
-    .card { background: var(--card); border-radius: 12px; border: 1px solid var(--border); padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
-    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
-    .kpi-card {
-      background: #fff; border-radius: 12px; padding: 18px; border: 1px solid var(--border);
-      display: flex; align-items: center; gap: 14px; border-left: 4px solid var(--navy);
-    }
-    .kpi-card.blue { border-left-color: #2563eb; }
-    .kpi-card.teal { border-left-color: #0d9488; }
-    .kpi-card.indigo { border-left-color: #6366f1; }
-    .kpi-card.green { border-left-color: #16a34a; }
-    .kpi-card.amber { border-left-color: #d97706; }
-    .kpi-card.red { border-left-color: #dc2626; }
-    .kpi-card.cyan { border-left-color: #0891b2; }
-    .kpi-icon {
-      width: 44px; height: 44px; border-radius: 10px; background: #eff6ff; color: var(--navy);
-      display: flex; align-items: center; justify-content: center; font-size: 19px;
-    }
-    .kpi-label { font-size: 12px; color: var(--muted); font-weight: 500; }
-    .kpi-info h3 { font-size: 24px; color: var(--navy); margin-top: 2px; }
+    <!-- MAIN CONTENT -->
+    <div class="main-wrapper">
+      <!-- TOP HEADER -->
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="menu-toggle" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></button>
+          <div>
+            <h2 id="pageTitle">Dashboard Utama</h2>
+            <span id="syncStatusBadge" class="sync-badge"><i class="fa-solid fa-circle-check"></i> Tersinkronisasi</span>
+          </div>
+        </div>
+        <div class="topbar-right">
+          <button class="btn btn-sm btn-outline" onclick="syncAllData(true)" title="Ambil data terbaru dari Spreadsheet">
+            <i class="fa-solid fa-arrows-rotate"></i> <span class="hide-sm">Refresh Data</span>
+          </button>
+          <div class="user-pill">
+            <i class="fa-solid fa-circle-user"></i>
+            <div>
+              <strong id="headerUserName">Admin</strong>
+              <small id="headerUserRole">Administrator</small>
+            </div>
+          </div>
+        </div>
+      </header>
 
-    .charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 20px; }
-    .chart-card .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
-    .chart-box { position: relative; height: 260px; width: 100%; }
+      <!-- CONTENT AREA -->
+      <main class="content-area">
 
-    /* FORMS, BUTTONS & TABLES */
-    .btn {
-      display: inline-flex; align-items: center; gap: 7px; padding: 9px 15px; border-radius: 8px;
-      font-weight: 600; font-size: 13px; border: 1px solid transparent; cursor: pointer; transition: 0.15s;
-    }
-    .btn-primary { background: var(--navy); color: #fff; }
-    .btn-primary:hover { background: var(--navy-light); }
-    .btn-secondary { background: var(--blue); color: #fff; }
-    .btn-outline { background: #fff; border-color: var(--border); color: var(--text); }
-    .btn-outline:hover { background: #f8fafc; }
-    .btn-danger { background: var(--danger); color: #fff; }
-    .btn-sm { padding: 6px 10px; font-size: 12px; }
-    .btn-block { width: 100%; justify-content: center; }
+        <!-- ============================================================== -->
+        <!-- 1. DASHBOARD UTAMA                                             -->
+        <!-- ============================================================== -->
+        <section id="page-dashboard" class="page-section active">
+          <div class="kpi-grid">
+            <div class="kpi-card navy">
+              <div class="kpi-icon"><i class="fa-solid fa-users"></i></div>
+              <div class="kpi-info"><span class="kpi-label">Total Penduduk Aktif</span><h3 id="kpiTotalPenduduk">0</h3></div>
+            </div>
+            <div class="kpi-card blue">
+              <div class="kpi-icon"><i class="fa-solid fa-house-user"></i></div>
+              <div class="kpi-info"><span class="kpi-label">Jumlah Kepala Keluarga</span><h3 id="kpiTotalKK">0</h3></div>
+            </div>
+            <div class="kpi-card teal">
+              <div class="kpi-icon"><i class="fa-solid fa-mars"></i></div>
+              <div class="kpi-info"><span class="kpi-label">Jumlah Laki-Laki</span><h3 id="kpiLaki">0</h3></div>
+            </div>
+            <div class="kpi-card indigo">
+              <div class="kpi-icon"><i class="fa-solid fa-venus"></i></div>
+              <div class="kpi-info"><span class="kpi-label">Jumlah Perempuan</span><h3 id="kpiPerempuan">0</h3></div>
+            </div>
+            <div class="kpi-card green">
+              <div class="kpi-icon"><i class="fa-solid fa-person-walking-arrow-right"></i></div>
+              <div class="kpi-info"><span class="kpi-label">Penduduk Datang</span><h3 id="kpiDatang">0</h3></div>
+            </div>
+            <div class="kpi-card amber">
+              <div class="kpi-icon"><i class="fa-solid fa-truck-moving"></i></div>
+              <div class="kpi-info"><span class="kpi-label">Penduduk Pindah</span><h3 id="kpiPindah">0</h3></div>
+            </div>
+            <div class="kpi-card red">
+              <div class="kpi-icon"><i class="fa-solid fa-cross"></i></div>
+              <div class="kpi-info"><span class="kpi-label">Penduduk Meninggal</span><h3 id="kpiMeninggal">0</h3></div>
+            </div>
+            <div class="kpi-card cyan">
+              <div class="kpi-icon"><i class="fa-solid fa-baby"></i></div>
+              <div class="kpi-info"><span class="kpi-label">Kelahiran (Tahun Ini)</span><h3 id="kpiLahir">0</h3></div>
+            </div>
+          </div>
 
-    input, select, textarea {
-      width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px;
-      font-family: inherit; font-size: 13.5px; color: var(--text); background: #fff;
-    }
-    input:focus, select:focus, textarea:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
-    .form-group { margin-bottom: 12px; }
-    .form-group label { display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 5px; color: #334155; }
-    .form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
-    .form-grid .full { grid-column: 1 / -1; }
-    .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 20px; }
+          <!-- GRAFIK STATISTIK (8 CHARTS) -->
+          <div class="charts-grid">
+            <div class="card chart-card">
+              <div class="card-header"><h4>Penduduk Berdasarkan Jenis Kelamin</h4></div>
+              <div class="chart-box"><canvas id="chartGender"></canvas></div>
+            </div>
+            <div class="card chart-card">
+              <div class="card-header"><h4>Penduduk Berdasarkan Kelompok Usia</h4></div>
+              <div class="chart-box"><canvas id="chartAge"></canvas></div>
+            </div>
+            <div class="card chart-card">
+              <div class="card-header"><h4>Penduduk Berdasarkan Pendidikan</h4></div>
+              <div class="chart-box"><canvas id="chartEducation"></canvas></div>
+            </div>
+            <div class="card chart-card">
+              <div class="card-header"><h4>Penduduk Berdasarkan Pekerjaan (Top 10)</h4></div>
+              <div class="chart-box"><canvas id="chartJob"></canvas></div>
+            </div>
+            <div class="card chart-card">
+              <div class="card-header"><h4>Penduduk Berdasarkan Agama</h4></div>
+              <div class="chart-box"><canvas id="chartReligion"></canvas></div>
+            </div>
+            <div class="card chart-card">
+              <div class="card-header"><h4>Penduduk Berdasarkan Status Perkawinan</h4></div>
+              <div class="chart-box"><canvas id="chartMarital"></canvas></div>
+            </div>
+            <div class="card chart-card">
+              <div class="card-header"><h4>Jumlah Penduduk Berdasarkan Dusun</h4></div>
+              <div class="chart-box"><canvas id="chartDusun"></canvas></div>
+            </div>
+            <div class="card chart-card">
+              <div class="card-header">
+                <h4>Mutasi Penduduk Per Bulan</h4>
+                <select id="chartMutasiYear" class="select-sm" onchange="renderDashboardCharts()"></select>
+              </div>
+              <div class="chart-box"><canvas id="chartMutasi"></canvas></div>
+            </div>
+          </div>
+        </section>
 
-    .toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; }
-    .toolbar-left, .toolbar-right { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-    .input-search { width: 260px; }
-    .select-sm { width: auto; padding: 7px 10px; font-size: 12.5px; }
-    .select-md { width: auto; min-width: 280px; }
+        <!-- ============================================================== -->
+        <!-- 2. MENU DATA PENDUDUK                                          -->
+        <!-- ============================================================== -->
+        <section id="page-penduduk" class="page-section">
+          <div class="card">
+            <div class="toolbar">
+              <div class="toolbar-left">
+                <button class="btn btn-primary write-only" onclick="openPendudukModal()">
+                  <i class="fa-solid fa-plus"></i> Tambah Penduduk
+                </button>
+                <label class="btn btn-secondary write-only" style="margin:0;cursor:pointer;">
+                  <i class="fa-solid fa-file-import"></i> Import Excel
+                  <input type="file" id="excelImportInput" accept=".xlsx,.xls,.csv" hidden onchange="handleExcelImport(event)" />
+                </label>
+                <button class="btn btn-outline" onclick="exportPendudukExcel()">
+                  <i class="fa-solid fa-file-excel"></i> Export Excel
+                </button>
+                <button class="btn btn-outline" onclick="printDaftarPenduduk()">
+                  <i class="fa-solid fa-print"></i> Cetak Daftar
+                </button>
+              </div>
+              <div class="toolbar-right">
+                <input type="text" id="searchPenduduk" class="input-search" placeholder="Cari NIK, Nama, atau No. KK..." oninput="filterAndRenderPenduduk(1)" />
+                <select id="sortPenduduk" class="select-sm" onchange="filterAndRenderPenduduk(1)">
+                  <option value="nama_asc">Urutkan: Nama (A-Z)</option>
+                  <option value="nama_desc">Urutkan: Nama (Z-A)</option>
+                  <option value="nik_asc">Urutkan: NIK (Naik)</option>
+                  <option value="nik_desc">Urutkan: NIK (Turun)</option>
+                </select>
+              </div>
+            </div>
 
-    .filter-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; padding: 12px; background: #f8fafc; border-radius: 8px; }
-    .filter-bar select { width: auto; min-width: 140px; padding: 6px 8px; font-size: 12px; }
+            <!-- FILTER LANJUTAN -->
+            <div class="filter-bar">
+              <select id="fltGender" onchange="filterAndRenderPenduduk(1)"><option value="">Semua Gender</option><option value="Laki-laki">Laki-laki</option><option value="Perempuan">Perempuan</option></select>
+              <select id="fltAgeGroup" onchange="filterAndRenderPenduduk(1)">
+                <option value="">Semua Kelompok Usia</option>
+                <option value="balita">Balita (0-4 th)</option>
+                <option value="anak">Anak-anak (5-14 th)</option>
+                <option value="remaja">Remaja (15-24 th)</option>
+                <option value="produktif">Produktif (15-64 th)</option>
+                <option value="lansia">Lansia (65+ th)</option>
+              </select>
+              <select id="fltEducation" onchange="filterAndRenderPenduduk(1)"><option value="">Semua Pendidikan</option></select>
+              <select id="fltJob" onchange="filterAndRenderPenduduk(1)"><option value="">Semua Pekerjaan</option></select>
+              <select id="fltReligion" onchange="filterAndRenderPenduduk(1)"><option value="">Semua Agama</option></select>
+              <select id="fltDusun" onchange="filterAndRenderPenduduk(1)"><option value="">Semua Dusun</option></select>
+              <select id="fltRW" onchange="filterAndRenderPenduduk(1)"><option value="">Semua RW</option></select>
+              <select id="fltRT" onchange="filterAndRenderPenduduk(1)"><option value="">Semua RT</option></select>
+              <select id="fltStatus" onchange="filterAndRenderPenduduk(1)">
+                <option value="AKTIF">Status: AKTIF</option>
+                <option value="">Semua Status</option>
+                <option value="PINDAH">Status: PINDAH</option>
+                <option value="MENINGGAL">Status: MENINGGAL</option>
+              </select>
+              <button class="btn btn-sm btn-outline" onclick="resetPendudukFilters()">Reset</button>
+            </div>
 
-    .table-responsive { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
-    .data-table { width: 100%; border-collapse: collapse; white-space: nowrap; font-size: 13px; }
-    .data-table th { background: #f8fafc; color: var(--navy); font-weight: 600; text-align: left; padding: 11px 12px; border-bottom: 1px solid var(--border); }
-    .data-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
-    .data-table tbody tr:hover { background: #f1f5f9; }
+            <!-- TABEL 21 KOLOM -->
+            <div class="table-responsive">
+              <table class="data-table" id="tabelPenduduk">
+                <thead>
+                  <tr>
+                    <th>No</th>
+                    <th>Aksi</th>
+                    <th>NIK</th>
+                    <th>Nomor KK</th>
+                    <th>Nama Lengkap</th>
+                    <th>Jenis Kelamin</th>
+                    <th>Tempat Lahir</th>
+                    <th>Tanggal Lahir</th>
+                    <th>Usia</th>
+                    <th>Agama</th>
+                    <th>Pendidikan</th>
+                    <th>Jenis Pekerjaan</th>
+                    <th>Status Perkawinan</th>
+                    <th>Hubungan Keluarga</th>
+                    <th>Kewarganegaraan</th>
+                    <th>Nama Ayah</th>
+                    <th>Nama Ibu</th>
+                    <th>Alamat</th>
+                    <th>RT</th>
+                    <th>RW</th>
+                    <th>Dusun</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="tbodyPenduduk"></tbody>
+              </table>
+            </div>
 
-    .badge { padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
-    .badge-aktif { background: #dcfce7; color: #166534; }
-    .badge-pindah { background: #fef3c7; color: #92400e; }
-    .badge-meninggal { background: #fee2e2; color: #991b1b; }
+            <div class="pagination-bar">
+              <span id="pendudukCountInfo">Menampilkan 0 data</span>
+              <div id="pendudukPagination" class="pagination-btns"></div>
+            </div>
+          </div>
+        </section>
 
-    .pagination-bar { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; flex-wrap: wrap; gap: 10px; }
-    .pagination-btns { display: flex; gap: 4px; }
+        <!-- ============================================================== -->
+        <!-- 3. MENU BIODATA PENDUDUK                                       -->
+        <!-- ============================================================== -->
+        <section id="page-biodata" class="page-section">
+          <div class="card">
+            <div class="toolbar">
+              <div class="toolbar-left" style="flex:1;max-width:450px;">
+                <input type="text" id="searchBiodataInput" class="input-search" placeholder="Ketik NIK atau Nama Penduduk untuk melihat biodata..." oninput="searchBiodataOptions()" />
+              </div>
+              <div class="toolbar-right" id="biodataActionBtns" style="display:none;">
+                <button class="btn btn-primary write-only" id="btnEditBiodata"><i class="fa-solid fa-pen"></i> Edit Biodata</button>
+                <button class="btn btn-secondary" id="btnViewKKFromBiodata"><i class="fa-solid fa-people-roof"></i> Lihat Kartu Keluarga</button>
+                <button class="btn btn-outline" onclick="printBiodata()"><i class="fa-solid fa-print"></i> Cetak Biodata</button>
+              </div>
+            </div>
+            <div id="biodataSearchDropdown" class="search-dropdown hidden"></div>
 
-    /* BIODATA & TABS */
-    .biodata-section-title { background: var(--navy); color: #fff; padding: 8px 14px; border-radius: 6px; font-size: 13px; margin: 16px 0 10px; }
-    .biodata-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
-    .biodata-table td { padding: 7px 10px; border-bottom: 1px solid var(--border); font-size: 13.5px; }
-    .biodata-table td:first-child { width: 220px; font-weight: 600; color: #475569; }
-    .empty-state { text-align: center; padding: 48px 20px; color: var(--muted); }
-    .empty-state i { font-size: 42px; margin-bottom: 10px; color: #94a3b8; }
+            <div id="biodataDetailContainer" class="biodata-container">
+              <div class="empty-state">
+                <i class="fa-solid fa-id-card-clip"></i>
+                <p>Pilih penduduk dari menu <strong>Data Penduduk</strong> atau cari berdasarkan NIK/Nama di atas.</p>
+              </div>
+            </div>
+          </div>
+        </section>
 
-    .rekap-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
-    .tab-btn { padding: 7px 14px; border-radius: 6px; border: 1px solid var(--border); background: #fff; cursor: pointer; font-weight: 600; font-size: 12.5px; }
-    .tab-btn.active { background: var(--navy); color: #fff; border-color: var(--navy); }
+        <!-- ============================================================== -->
+        <!-- 4. MENU KARTU KELUARGA (KK)                                    -->
+        <!-- ============================================================== -->
+        <section id="page-kk" class="page-section">
+          <div class="card">
+            <div class="toolbar">
+              <div class="toolbar-left">
+                <button class="btn btn-primary write-only" onclick="openKKModal()">
+                  <i class="fa-solid fa-plus"></i> Tambah Kartu Keluarga
+                </button>
+              </div>
+              <div class="toolbar-right">
+                <input type="text" id="searchKKInput" class="input-search" placeholder="Cari Nomor KK atau Nama Kepala Keluarga..." oninput="renderKKTable()" />
+              </div>
+            </div>
 
-    .ref-tags-box { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-    .ref-tag { background: #eff6ff; border: 1px solid #bfdbfe; padding: 5px 10px; border-radius: 6px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 8px; }
-    .ref-tag button { background:
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>No</th>
+                    <th>Nomor KK</th>
+                    <th>Kepala Keluarga</th>
+                    <th>NIK Kepala</th>
+                    <th>Alamat</th>
+                    <th>RT / RW</th>
+                    <th>Dusun</th>
+                    <th>Jumlah Anggota</th>
+                    <th>Aksi</th>
+                  </tr>
+                </thead>
+                <tbody id="tbodyKK"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- PANEL DETAIL ANGGOTA KK & PRATINJAU CETAK -->
+          <div id="kkDetailPanel" class="card hidden" style="margin-top:20px;">
+            <div class="toolbar">
+              <div>
+                <h3 id="kkDetailTitle">Detail Kartu Keluarga</h3>
+                <small id="kkDetailSubtitle" class="text-muted"></small>
+              </div>
+              <div class="toolbar-right">
+                <button class="btn btn-primary btn-sm write-only" onclick="openAddAnggotaKKModal()">
+                  <i class="fa-solid fa-user-plus"></i> Tambah Anggota
+                </button>
+                <button class="btn btn-secondary btn-sm" onclick="previewCetakKK()">
+                  <i class="fa-solid fa-eye"></i> Preview Kartu Keluarga
+                </button>
+                <button class="btn btn-outline btn-sm" onclick="printKartuKeluarga()">
+                  <i class="fa-solid fa-print"></i> Cetak KK (A4 Landscape)
+                </button>
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>No</th>
+                    <th>NIK</th>
+                    <th>Nama Lengkap</th>
+                    <th>L/P</th>
+                    <th>Tempat, Tgl Lahir</th>
+                    <th>Status Hubungan</th>
+                    <th>Status</th>
+                    <th>Aksi Anggota</th>
+                  </tr>
+                </thead>
+                <tbody id="tbodyAnggotaKK"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================== -->
+        <!-- 5A. MUTASI PENDUDUK DATANG                                     -->
+        <!-- ============================================================== -->
+        <section id="page-mutasi-datang" class="page-section">
+          <div class="card">
+            <div class="toolbar">
+              <h3>Mutasi Penduduk Datang</h3>
+              <div class="toolbar-right">
+                <button class="btn btn-primary write-only" onclick="openMutasiDatangModal()">
+                  <i class="fa-solid fa-plus"></i> Input Penduduk Datang
+                </button>
+                <button class="btn btn-outline" onclick="printLaporan('datang')">
+                  <i class="fa-solid fa-print"></i> Cetak Laporan
+                </button>
+              </div>
+            </div>
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>No. Transaksi</th>
+                    <th>Tgl Datang</th>
+                    <th>NIK</th>
+                    <th>Nama Lengkap</th>
+                    <th>L/P</th>
+                    <th>Alamat Asal</th>
+                    <th>Alamat Tujuan (RT/RW/Dusun)</th>
+                    <th>No. Surat Pindah</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="tbodyMutasiDatang"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================== -->
+        <!-- 5B. MUTASI PENDUDUK PINDAH                                     -->
+        <!-- ============================================================== -->
+        <section id="page-mutasi-pindah" class="page-section">
+          <div class="card">
+            <div class="toolbar">
+              <h3>Mutasi Penduduk Pindah / Pergi</h3>
+              <div class="toolbar-right">
+                <button class="btn btn-primary write-only" onclick="openMutasiPindahModal()">
+                  <i class="fa-solid fa-plus"></i> Input Penduduk Pindah
+                </button>
+                <button class="btn btn-outline" onclick="printLaporan('pindah')">
+                  <i class="fa-solid fa-print"></i> Cetak Laporan
+                </button>
+              </div>
+            </div>
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>No. Transaksi</th>
+                    <th>Tgl Pindah</th>
+                    <th>NIK</th>
+                    <th>Nama Lengkap</th>
+                    <th>No. KK</th>
+                    <th>Tujuan Pindah</th>
+                    <th>Alasan</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="tbodyMutasiPindah"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================== -->
+        <!-- 5C. MUTASI PENDUDUK MENINGGAL                                  -->
+        <!-- ============================================================== -->
+        <section id="page-mutasi-meninggal" class="page-section">
+          <div class="card">
+            <div class="toolbar">
+              <h3>Mutasi Penduduk Meninggal Dunia</h3>
+              <div class="toolbar-right">
+                <button class="btn btn-primary write-only" onclick="openMutasiMeninggalModal()">
+                  <i class="fa-solid fa-plus"></i> Input Data Kematian
+                </button>
+                <button class="btn btn-outline" onclick="printLaporan('meninggal')">
+                  <i class="fa-solid fa-print"></i> Cetak Laporan
+                </button>
+              </div>
+            </div>
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>No. Transaksi</th>
+                    <th>Tgl Meninggal</th>
+                    <th>NIK</th>
+                    <th>Nama Lengkap</th>
+                    <th>L/P</th>
+                    <th>Tempat & Penyebab</th>
+                    <th>No. Surat Kematian</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="tbodyMutasiMeninggal"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================== -->
+        <!-- 6. MENU REKAPITULASI PENDUDUK                                  -->
+        <!-- ============================================================== -->
+        <section id="page-rekapitulasi" class="page-section">
+          <div class="card">
+            <div class="toolbar">
+              <h3>Rekapitulasi Statistik Kependudukan Dinamis</h3>
+              <div class="toolbar-right">
+                <select id="rekapYear" class="select-sm" onchange="renderAllRekapitulasi()"></select>
+                <select id="rekapDusun" class="select-sm" onchange="renderAllRekapitulasi()"><option value="">Semua Dusun</option></select>
+                <select id="rekapRW" class="select-sm" onchange="renderAllRekapitulasi()"><option value="">Semua RW</option></select>
+                <select id="rekapRT" class="select-sm" onchange="renderAllRekapitulasi()"><option value="">Semua RT</option></select>
+                <button class="btn btn-outline btn-sm" onclick="window.print()"><i class="fa-solid fa-print"></i> Cetak</button>
+              </div>
+            </div>
+
+            <div class="rekap-tabs">
+              <button class="tab-btn active" onclick="switchRekapTab('gender', this)">Jenis Kelamin</button>
+              <button class="tab-btn" onclick="switchRekapTab('usia', this)">Kelompok Usia & Kategori</button>
+              <button class="tab-btn" onclick="switchRekapTab('pendidikan', this)">Pendidikan</button>
+              <button class="tab-btn" onclick="switchRekapTab('pekerjaan', this)">Pekerjaan</button>
+              <button class="tab-btn" onclick="switchRekapTab('agama', this)">Agama</button>
+              <button class="tab-btn" onclick="switchRekapTab('perkawinan', this)">Status Perkawinan</button>
+              <button class="tab-btn" onclick="switchRekapTab('wilayah', this)">Wilayah (Dusun/RW/RT)</button>
+            </div>
+
+            <div id="rekapContent" class="rekap-content"></div>
+          </div>
+        </section>
+
+        <!-- ============================================================== -->
+        <!-- 7. MENU LAPORAN KEPENDUDUKAN (16 JENIS LAPORAN RESMI)          -->
+        <!-- ============================================================== -->
+        <section id="page-laporan" class="page-section">
+          <div class="card">
+            <div class="toolbar">
+              <div class="toolbar-left" style="flex-wrap:wrap;">
+                <select id="jenisLaporanSelect" class="select-md" onchange="generateLaporanPreview()">
+                  <option value="1">1. Laporan Jumlah Penduduk Keseluruhan</option>
+                  <option value="2">2. Laporan Penduduk Berdasarkan Jenis Kelamin</option>
+                  <option value="3">3. Laporan Penduduk Berdasarkan Kelompok Usia</option>
+                  <option value="4">4. Laporan Penduduk Berdasarkan Pendidikan</option>
+                  <option value="5">5. Laporan Penduduk Berdasarkan Pekerjaan</option>
+                  <option value="6">6. Laporan Penduduk Berdasarkan Agama</option>
+                  <option value="7">7. Laporan Penduduk Berdasarkan Status Perkawinan</option>
+                  <option value="8">8. Laporan Jumlah Kartu Keluarga (KK)</option>
+                  <option value="9">9. Laporan Anggota Keluarga Per KK</option>
+                  <option value="10">10. Laporan Penduduk Berdasarkan Dusun</option>
+                  <option value="11">11. Laporan Penduduk Berdasarkan RT/RW</option>
+                  <option value="12">12. Laporan Penduduk Datang</option>
+                  <option value="13">13. Laporan Penduduk Pindah</option>
+                  <option value="14">14. Laporan Penduduk Meninggal</option>
+                  <option value="15">15. Laporan Perkembangan Penduduk Bulanan</option>
+                  <option value="16">16. Laporan Perkembangan Penduduk Tahunan</option>
+                </select>
+                <select id="laporanBulan" class="select-sm" onchange="generateLaporanPreview()">
+                  <option value="">Semua Bulan</option>
+                  <option value="01">Januari</option><option value="02">Februari</option>
+                  <option value="03">Maret</option><option value="04">April</option>
+                  <option value="05">Mei</option><option value="06">Juni</option>
+                  <option value="07">Juli</option><option value="08">Agustus</option>
+                  <option value="09">September</option><option value="10">Oktober</option>
+                  <option value="11">November</option><option value="12">Desember</option>
+                </select>
+                <select id="laporanTahun" class="select-sm" onchange="generateLaporanPreview()"></select>
+              </div>
+              <div class="toolbar-right">
+                <button class="btn btn-outline" onclick="exportLaporanExcel()">
+                  <i class="fa-solid fa-file-excel"></i> Export Excel
+                </button>
+                <button class="btn btn-primary" onclick="printLaporanResmi()">
+                  <i class="fa-solid fa-print"></i> Cetak / Simpan PDF
+                </button>
+              </div>
+            </div>
+
+            <div id="laporanPaper" class="official-paper"></div>
+          </div>
+        </section>
+
+        <!-- ============================================================== -->
+        <!-- 8. MENU PENGATURAN & BACKUP                                    -->
+        <!-- ============================================================== -->
+        <section id="page-pengaturan" class="page-section">
+          <div class="grid-2">
+            <div class="card">
+              <h3>Identitas Pemerintah Desa & Pejabat</h3>
+              <form id="formPengaturan" onsubmit="handleSavePengaturanSubmit(event)">
+                <div class="form-grid">
+                  <div class="form-group"><label>Nama Instansi Desa</label><input type="text" name="nama_desa" required /></div>
+                  <div class="form-group"><label>Nama Desa (Singkat)</label><input type="text" name="nama_desa_singkat" required /></div>
+                  <div class="form-group"><label>Kecamatan</label><input type="text" name="kecamatan" required /></div>
+                  <div class="form-group"><label>Kabupaten/Kota</label><input type="text" name="kabupaten" required /></div>
+                  <div class="form-group"><label>Provinsi</label><input type="text" name="provinsi" required /></div>
+                  <div class="form-group"><label>Kode Pos</label><input type="text" name="kode_pos" /></div>
+                  <div class="form-group full"><label>Alamat Kantor Desa</label><input type="text" name="alamat_kantor" /></div>
+                  <div class="form-group"><label>Nama Kepala Desa</label><input type="text" name="nama_kepala_desa" required /></div>
+                  <div class="form-group"><label>Jabatan Penandatangan</label><input type="text" name="jabatan_penandatangan" /></div>
+                  <div class="form-group"><label>Nama Sekretaris Desa</label><input type="text" name="nama_sekdes" /></div>
+                  <div class="form-group"><label>Tahun Laporan Default</label><input type="number" name="tahun_laporan" /></div>
+                  <div class="form-group full"><label>URL Logo Desa (PNG/JPG)</label><input type="url" name="logo_desa" placeholder="https://..." /></div>
+                </div>
+                <button type="submit" class="btn btn-primary" style="margin-top:14px;">
+                  <i class="fa-solid fa-floppy-disk"></i> Simpan Pengaturan
+                </button>
+              </form>
+            </div>
+
+            <div class="card">
+              <h3>Referensi Wilayah (Dusun, RW, RT) & Backup Database</h3>
+              <div class="ref-manager">
+                <div class="form-inline">
+                  <select id="refKategoriSelect" class="select-sm">
+                    <option value="DUSUN">Dusun</option>
+                    <option value="RW">RW</option>
+                    <option value="RT">RT</option>
+                    <option value="PEKERJAAN">Pekerjaan</option>
+                    <option value="PENDIDIKAN">Pendidikan</option>
+                  </select>
+                  <input type="text" id="refNilaiInput" placeholder="Masukkan nama/nomor baru..." />
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="addReferensiItem()">Tambah</button>
+                </div>
+                <div id="referensiListBox" class="ref-tags-box"></div>
+              </div>
+
+              <hr style="margin:20px 0;border:none;border-top:1px solid #e2e8f0;" />
+              <h4>Backup Database Google Spreadsheet</h4>
+              <p class="text-muted" style="font-size:13px;margin:6px 0 12px;">
+                Membuat salinan utuh seluruh sheet database ke Google Drive Anda secara instan.
+              </p>
+              <button type="button" class="btn btn-primary" onclick="triggerBackupDatabase()">
+                <i class="fa-solid fa-cloud-arrow-up"></i> Backup Database Sekarang
+              </button>
+              <div id="backupResultBox" style="margin-top:10px;font-size:13px;"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================== -->
+        <!-- 9. MANAJEMEN PENGGUNA                                          -->
+        <!-- ============================================================== -->
+        <section id="page-pengguna" class="page-section">
+          <div class="card">
+            <div class="toolbar">
+              <h3>Manajemen Akun & Hak Akses Pengguna</h3>
+              <button class="btn btn-primary" onclick="openUserModal()">
+                <i class="fa-solid fa-user-plus"></i> Tambah Pengguna
+              </button>
+            </div>
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>ID User</th>
+                    <th>Username</th>
+                    <th>Nama Lengkap</th>
+                    <th>Role / Hak Akses</th>
+                    <th>Status</th>
+                    <th>Login Terakhir</th>
+                    <th>Aksi</th>
+                  </tr>
+                </thead>
+                <tbody id="tbodyUsers"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================== -->
+        <!-- 10. LOG AKTIVITAS                                              -->
+        <!-- ============================================================== -->
+        <section id="page-log" class="page-section">
+          <div class="card">
+            <div class="toolbar">
+              <h3>Log Aktivitas & Audit Sistem</h3>
+            </div>
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Waktu</th>
+                    <th>Username</th>
+                    <th>Role</th>
+                    <th>Aksi</th>
+                    <th>Modul</th>
+                    <th>Detail Aktivitas</th>
+                  </tr>
+                </thead>
+                <tbody id="tbodyLogs"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- ====================================================================== -->
+  <!-- MODAL FORMULIR (PENDUDUK, KK, ANGGOTA KK, MUTASI, USER, PREVIEW KK)    -->
+  <!-- ====================================================================== -->
+  <div id="modalBackdrop" class="modal-backdrop hidden" onclick="closeModalOnBackdrop(event)">
+    <div id="modalContainer" class="modal-box">
+      <div class="modal-header">
+        <h3 id="modalTitle">Judul Modal</h3>
+        <button class="modal-close" onclick="closeModal()"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div id="modalBody" class="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- AREA KHUSUS CETAK (KARTU KELUARGA A4 LANDSCAPE / LAPORAN) -->
+  <div id="printArea" class="print-area"></div>
+
+  <script src="script.js"></script>
+</body>
+</html>
